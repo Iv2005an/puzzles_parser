@@ -257,9 +257,9 @@ class PuzzlesParser:
                         manufacturer = ""
                     country = ""
                 image_url = self.__HOST_URL + str(image_block.get("href"))
-                image_path = (
-                    self.__SAVE_IMAGES_DIRECTORY_PATH + image_url.split("/")[-1]
-                )
+                image_path = Path.joinpath(
+                    Path(self.__SAVE_IMAGES_DIRECTORY_PATH), image_url.split("/")[-1]
+                ).as_posix()
                 await self.__download_image(session, image_url)
                 self.__puzzles.append(
                     Puzzle(
