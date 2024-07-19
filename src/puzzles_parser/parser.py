@@ -4,6 +4,7 @@ from aiohttp import ClientSession, TCPConnector, ClientTimeout, ClientConnection
 import aiofiles
 from bs4 import BeautifulSoup, Tag
 from pathlib import Path
+from PIL import Image
 import re
 import requests
 
@@ -91,7 +92,7 @@ class PuzzlesParser:
                         page_text = await page_file.read()
                     break
                 except OSError:
-                    await asyncio.sleep(1)
+                    await self.__sleep()
             print(f"СТРАНИЦЫ: Получена {i} из кеша")
         else:
             print(f"СТРАНИЦЫ: Получение {i}")
@@ -103,14 +104,14 @@ class PuzzlesParser:
                         page_text = await response.text()
                     break
                 except ClientConnectionError:
-                    await asyncio.sleep(1)
+                    await self.__sleep()
             while True:
                 try:
                     async with aiofiles.open(page_file_path, "w") as page_file:
                         await page_file.write(page_text)
                     break
                 except OSError:
-                    await asyncio.sleep(1)
+                    await self.__sleep()
             print(f"СТРАНИЦЫ: Получена {i}")
         page = BeautifulSoup(page_text, "lxml")
         puzzles_urls: list[str] = []
@@ -144,7 +145,7 @@ class PuzzlesParser:
                         puzzle_page_text = await puzzle_file.read()
                     break
                 except OSError:
-                    await asyncio.sleep(1)
+                    await self.__sleep()
             print(f"ПАЗЛЫ: Получен из кеша {puzzle_simple_file_name}")
         else:
             print(f"ПАЗЛЫ: Получение {puzzle_simple_file_name}")
@@ -154,14 +155,14 @@ class PuzzlesParser:
                         puzzle_page_text = await response.text()
                     break
                 except ClientConnectionError:
-                    await asyncio.sleep(1)
+                    await self.__sleep()
             while True:
                 try:
                     async with aiofiles.open(puzzle_file_path, "w") as puzzle_file:
                         await puzzle_file.write(puzzle_page_text)
                     break
                 except OSError:
-                    await asyncio.sleep(1)
+                    await self.__sleep()
             print(f"ПАЗЛЫ: Получен {puzzle_simple_file_name}")
         page = BeautifulSoup(puzzle_page_text, "lxml")
         puzzle_card = page.find("div", class_="card-body")
@@ -260,7 +261,13 @@ class PuzzlesParser:
                 image_path = Path.joinpath(
                     Path(self.__SAVE_IMAGES_DIRECTORY_PATH), image_url.split("/")[-1]
                 ).as_posix()
-                await self.__download_image(session, image_url)
+                image_width, image_height = await self.__download_image(
+                    session, image_url
+                )
+                if not (width > height and image_width > image_height) or (
+                    width < height and image_width < image_height
+                ):
+                    width, height = height, width
                 self.__puzzles.append(
                     Puzzle(
                         article_number,
@@ -280,9 +287,9 @@ class PuzzlesParser:
                 )
 
     async def __download_image(self, session: ClientSession, url: str):
-        image_simple_file_name = url.split("/")[-1]
+        image_file_name = url.split("/")[-1]
         image_file_path = Path.joinpath(
-            Path(self.__SAVE_IMAGES_DIRECTORY_PATH), image_simple_file_name
+            Path(self.__SAVE_IMAGES_DIRECTORY_PATH), image_file_name
         )
         if not Path.is_file(image_file_path):
             while True:
@@ -291,15 +298,23 @@ class PuzzlesParser:
                         image_bytes = await response.read()
                     break
                 except ClientConnectionError:
-                    await asyncio.sleep(1)
+                    await self.__sleep()
             while True:
                 try:
                     async with aiofiles.open(image_file_path, "wb") as image_file:
                         await image_file.write(image_bytes)
                     break
                 except OSError:
-                    await asyncio.sleep(1)
-            print(f"ИЗОБРАЖЕНИЯ: Загружена {image_simple_file_name}")
+                    await self.__sleep()
+            print(f"ИЗОБРАЖЕНИЯ: Загружена {image_file_name}")
+        while True:
+            try:
+                return Image.open(image_file_path).size
+            except OSError:
+                await self.__sleep()
+
+    async def __sleep(self):
+        await asyncio.sleep(0.01)
 
     async def __save(self):
         file_name = datetime.now().strftime(r"%d_%m_%Y_%H_%M_%S")
@@ -318,7 +333,7 @@ class PuzzlesParser:
                     await write_sql_task
                 break
             except OSError:
-                await asyncio.sleep(1)
+                await self.__sleep()
         print(
             f"ПРОЦЕСС ЗАВЕРШЁН\nОбработано:\n\tСтраниц:{self.__pages_count}\n\tПазлов:{self.__puzzles_count}\nДанные сохранены по пути: {self.__SAVE_DIRECTORY_PATH}"
         )
